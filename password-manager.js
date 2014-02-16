@@ -58,7 +58,10 @@ var keychain = function() {
     * Return Type: void
     */
   keychain.init = function(password) {
-    priv.data.version = "CS 255 Password Manager v1.0";
+	  // Iniitialize a new password manager.
+	  priv.secrets.masterKDF = KDF(password, "10000000"); 
+	  ready = true;
+      priv.data.version = "CS 255 Password Manager v1.0";
   };
 
   /**
@@ -79,7 +82,18 @@ var keychain = function() {
     * Return Type: boolean
     */
   keychain.load = function(password, repr, trusted_data_check) {
-    throw "Not implemented!";
+	if (trusted_data_check == undefined || SHA256(string_to_bitarray(repr)) != trusted_data_check) {
+	  throw "Failed integrity check.";
+    }
+	var deserialized = JSON.parse(repr);
+	if (KDF(password) != deserialized.priv.secrets.masterKDF) {
+		return false;
+	}
+	keychain = deserialized.keychain; 
+	priv = deserialized.priv;
+	ready = true; 
+	return true;
+	//throw "Not implemented!";
   };
 
   /**
@@ -96,7 +110,10 @@ var keychain = function() {
     * Return Type: array
     */ 
   keychain.dump = function() {
-    throw "Not implemented!";
+	  var ret_val = [];
+	  ret_val[0] = JSON.stringify(keychain);
+	  ret_val[1] = SHA256(string_to_bitarray(ret_val[0]));
+	  return ret_val;
   }
 
   /**
@@ -110,7 +127,19 @@ var keychain = function() {
     * Return Type: string
     */
   keychain.get = function(name) {
-    throw "Not implemented!";
+	  if (!ready) {
+		  throw "Keychain not initialized.";
+	  }
+	  var masterKDF = priv.secrets.masterKDF;
+	  var hmac = HMAC(masterKDF, name);
+	  var ciphertext = keychain[hmac];
+	  if (!ciphertext) {
+		  return null;
+	  }
+	  var cipher = setup_cipher(bitarray_slice(masterKDF, 0, 128));
+	  var dec_pwd = dec_gcm(cipher, ciphertext);
+	  var pwd = string_from_padded_bitarray(dec_pwd, MAX_PW_LEN_BYTES);
+	  return pwd;
   }
 
   /** 
@@ -125,7 +154,16 @@ var keychain = function() {
   * Return Type: void
   */
   keychain.set = function(name, value) {
-    throw "Not implemented!";
+	  if (!ready) {
+		  throw "Keychain not initialized.";
+	  }
+	  var masterKDF = priv.secrets.masterKDF;
+	  var hmac = HMAC(masterKDF, name);
+	  var cipher = setup_cipher(bitarray_slice(masterKDF, 0, 128));
+	  var padded_pwd = string_to_padded_bitarray(value, MAX_PW_LEN_BYTES);
+	  var ciphertext = enc_gcm(cipher, padded_pwd);
+	  keychain[hmac] = ciphertext;
+	//throw "Not implemented!";
   }
 
   /**
@@ -138,7 +176,15 @@ var keychain = function() {
     * Return Type: boolean
   */
   keychain.remove = function(name) {
-    throw "Not implemented!";
+	  if (!ready) {
+		  throw "Keychain not initialized.";
+	  }
+	  var hmac = HMAC(priv.secrets.masterKDF, name);
+	  if (!keychain[hmac]) {
+		  return false;
+	  }
+	  delete keychain[hmac];
+	  return true;
   }
 
   return keychain;
