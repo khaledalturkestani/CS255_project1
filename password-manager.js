@@ -84,19 +84,13 @@ var keychain = function() {
     keychain.load = function(password, repr, trusted_data_check) {
 	  if (trusted_data_check = undefined || !bitarray_equal(string_to_bitarray(SHA256(string_to_bitarray(repr))),string_to_bitarray(trusted_data_check))){
 	    throw "Failed integrity check.";
-    }
-    
+      }
 	  var deserialized = JSON.parse(repr);
 	  var priv_JSON = deserialized.substr(0, deserialized.indexOf("#"));
 	  var keychain_JSON = deserialized.substr(deserialized.indexOf("#")+1, deserialized.length);
-	  console.log(priv_JSON);
-	  console.log(keychain_JSON);
 	  priv = JSON.parse(priv_JSON);
 	  keychain = JSON.parse(keychain_JSON);
-	  console.log(priv);
-	  console.log(keychain);
-	  console.log(priv.secrets.masterKDF);
-	  if (KDF(password, "10000000") != priv.secrets.masterKDF) {
+	  if (!bitarray_equal(KDF(password, "10000000"), priv.secrets.masterKDF)) {
 		  return false;
 	  }
 	  ready = true; 
@@ -123,7 +117,6 @@ var keychain = function() {
 	  s = s.concat(JSON.stringify(keychain));
 	  ret_val[0] = JSON.stringify(s);
 	  ret_val[1] = SHA256(string_to_bitarray(ret_val[0]));
-	  console.log(ret_val[0]);
 	  return ret_val;
   }
 
