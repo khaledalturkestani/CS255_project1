@@ -1,5 +1,14 @@
 "use strict";
 
+/*
+  k <-- PBKDF(pwd||salt)
+  k_hmac <-- HMAC(k, r0) // r1 is random bits (or any value, like 0, that's different from r2) saved in priv.data
+  k_gcm <-- HMAC(k, r1)  // r2 is random bits (or any value, like 1, that's different from r2) saved in priv.data
+  tag that is stored on disk and used for verifying key, t <-- HMAC(k, r2) // r3 is random bits (or any value, like 0, 
+																		// that's different from r2) saved in priv.data.
+  To argue security, say that we're only using k_prf, k_gcm, and t, which are "pseudorandom" bits, and that the only
+  dependence on k is through PRF(k, 0), PRF(k, 1), and PRF(k, 2)  
+*/
 
 /********* External Imports ********/
 
@@ -60,8 +69,9 @@ var keychain = function() {
   keychain.init = function(password) {
 	  // Iniitialize a new password manager.
 	  priv.secrets.masterKDF = KDF(password, "10000000"); 
+      //priv.data.version = "CS 255 Password Manager v1.0";
+	  priv.data.k_verification_tag = HMAC(priv.secrets.masterKDF, "2");
 	  ready = true;
-    priv.data.version = "CS 255 Password Manager v1.0";
   };
 
   /**
@@ -90,7 +100,7 @@ var keychain = function() {
 	  var keychain_JSON = deserialized.substr(deserialized.indexOf("#")+1, deserialized.length);
 	  priv = JSON.parse(priv_JSON);
 	  keychain = JSON.parse(keychain_JSON);
-	  if (!bitarray_equal(KDF(password, "10000000"), priv.secrets.masterKDF)) {
+	  if (!bitarray_equal(HMAC(KDF(password, "10000000"), "2"), priv.data.k_verification_tag)) {
 		  return false;
 	  }
 	  ready = true; 
@@ -135,13 +145,20 @@ var keychain = function() {
 		  throw "Keychain not initialized.";
 	  }
 	  var masterKDF = priv.secrets.masterKDF;
-	  var hmac = HMAC(masterKDF, name);
+	  var k_hmac = HMAC(masterKDF, "0");
+	  var k_gcm = HMAC(masterKDF, "1");
+	  var hmac = HMAC(k_hmac, name);
 	  var ciphertext = keychain[hmac];
 	  if (!ciphertext) {
 		  return null;
 	  }
-	  var cipher = setup_cipher(bitarray_slice(masterKDF, 0, 128));
-	  var dec_pwd = dec_gcm(cipher, ciphertext);
+	  var cipher = setup_cipher(bitarray_slice(k_gcm, 0, 128));	 
+	  var dec = dec_gcm(cipher, ciphertext);
+	  var dec_pwd = bitarray_slice(dec, 0, bitarray_len(dec)-bitarray_len(hmac));
+	  var verification_hmac = bitarray_slice(dec, bitarray_len(dec)-bitarray_len(hmac), bitarray_len(dec));
+	  if (!bitarray_equal(hmac, verification_hmac)) {
+		  throw "Tampering detected";
+	  }
 	  var pwd = string_from_padded_bitarray(dec_pwd, MAX_PW_LEN_BYTES);
 	  return pwd;
   }
@@ -162,9 +179,12 @@ var keychain = function() {
 		  throw "Keychain not initialized.";
 	  }
 	  var masterKDF = priv.secrets.masterKDF;
-	  var hmac = HMAC(masterKDF, name);
-	  var cipher = setup_cipher(bitarray_slice(masterKDF, 0, 128));
+	  var k_hmac = HMAC(masterKDF, "0");
+	  var k_gcm = HMAC(masterKDF, "1");
+	  var hmac = HMAC(k_hmac, name);
+	  var cipher = setup_cipher(bitarray_slice(k_gcm, 0, 128));
 	  var padded_pwd = string_to_padded_bitarray(value, MAX_PW_LEN_BYTES);
+	  padded_pwd = bitarray_concat(padded_pwd, hmac);
 	  var ciphertext = enc_gcm(cipher, padded_pwd);
 	  keychain[hmac] = ciphertext;
 	//throw "Not implemented!";
@@ -183,7 +203,8 @@ var keychain = function() {
 	  if (!ready) {
 		  throw "Keychain not initialized.";
 	  }
-	  var hmac = HMAC(priv.secrets.masterKDF, name);
+	  var k_hmac = HMAC(priv.secrets.masterKDF, "0");
+	  var hmac = HMAC(k_hmac, name);
 	  if (!keychain[hmac]) {
 		  return false;
 	  }
