@@ -69,8 +69,14 @@ var keychain = function() {
   keychain.init = function(password) {
 	  // Iniitialize a new password manager.
 	  priv.secrets.masterKDF = KDF(password, "10000000"); 
-      //priv.data.version = "CS 255 Password Manager v1.0";
+	  
+	  // Private Data, will NOT be seriliazed into disk
+	  priv.secrets.k_hmac = HMAC(priv.secrets.masterKDF, "0");
+	  priv.secrets.k_gcm = HMAC(priv.secrets.masterKDF, "1");
+	  
+	  // Public Data, will be seriliazed into disk
 	  priv.data.k_verification_tag = HMAC(priv.secrets.masterKDF, "2");
+	  
 	  ready = true;
   };
 
@@ -145,8 +151,8 @@ var keychain = function() {
 		  throw "Keychain not initialized.";
 	  }
 	  var masterKDF = priv.secrets.masterKDF;
-	  var k_hmac = HMAC(masterKDF, "0");
-	  var k_gcm = HMAC(masterKDF, "1");
+	  var k_hmac = priv.secrets.k_hmac;
+	  var k_gcm = priv.secrets.k_gcm;
 	  var hmac = HMAC(k_hmac, name);
 	  var ciphertext = keychain[hmac];
 	  if (!ciphertext) {
@@ -179,8 +185,8 @@ var keychain = function() {
 		  throw "Keychain not initialized.";
 	  }
 	  var masterKDF = priv.secrets.masterKDF;
-	  var k_hmac = HMAC(masterKDF, "0");
-	  var k_gcm = HMAC(masterKDF, "1");
+	  var k_hmac = priv.secrets.k_hmac;
+	  var k_gcm = priv.secrets.k_gcm;
 	  var hmac = HMAC(k_hmac, name);
 	  var cipher = setup_cipher(bitarray_slice(k_gcm, 0, 128));
 	  var padded_pwd = string_to_padded_bitarray(value, MAX_PW_LEN_BYTES);
@@ -203,7 +209,7 @@ var keychain = function() {
 	  if (!ready) {
 		  throw "Keychain not initialized.";
 	  }
-	  var k_hmac = HMAC(priv.secrets.masterKDF, "0");
+	  var k_hmac = priv.secrets.k_hmac;
 	  var hmac = HMAC(k_hmac, name);
 	  if (!keychain[hmac]) {
 		  return false;
