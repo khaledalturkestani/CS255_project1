@@ -1,6 +1,27 @@
 "use strict";
 
 /*
+
+
+
+  1. Briefly describe your method for preventing the adversary from learning information about the lengths of the passwords stored in your password manager.
+
+    1. We used the padding function in our implementation to to pad all passwords to maximum password length specified in the program. Therefore all passwords stored in our password manager have same length.
+
+  2. Briefly describe your method for preventing swap attacks (Section 2.2). [ ]Provide an argument for why the attack is prevented in your scheme.
+
+
+    1. The key-value-store in our password stores a pair of HMAC hashed domain name, and an authentication encrypted password concatenated with the HMAC hash of its domain name.  
+    2. keychain  = {HMAC(domain_name), AE(password || HMAC(domain_name))}
+
+  3. In our proposed defense against the rollback attack (Section 2.2), we assume that we can store the SHA-256 hash in a trusted location beyond the reach of an adversary. Is it necessary to assume that such a trusted location exists, in order to defend against rollback attacks? Briefly justify your answer.
+  4. What if we had used a different MAC (other than HMAC) on the domain names to produce the keys for the key-value store? Would the scheme still satisfy the desired security properties? Either show this, or give an example of a secure MAC for which the resulting password manager implementation would be insecure.
+
+  5. In our specification, we leak the number of records in the password manager. Describe an approach to reduce or completely eliminate the information leaked about the number of records.
+
+*/
+
+/*
   k <-- PBKDF(pwd||salt)
   k_hmac <-- HMAC(k, r0) // r1 is random bits (or any value, like 0, that's different from r2) saved in priv.data
   k_gcm <-- HMAC(k, r1)  // r2 is random bits (or any value, like 1, that's different from r2) saved in priv.data
