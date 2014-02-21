@@ -28,7 +28,7 @@ Short-Answer Questions:
           and HMAC(domain_name2), AE(padded_password1 || HMAC(domain_name2)).
     However, this means that the adversary broke AE() (i.e. gcm) since he was able to correctly encrypt the new entries 
  		      padded_password2 || HMAC(domain_name1)
-          and padded_password1 || HMAC(domain_name2).
+          gnd padded_password1 || HMAC(domain_name2).
     But AE() is secure. We have reached a contradiction. Thus, the scheme protects againts a swap attack.
 
 3. In our proposed defense against the rollback attack (Section 2.2), we assume that we can store the SHA-256 hash in a trusted 
