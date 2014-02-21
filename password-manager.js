@@ -1,24 +1,65 @@
 "use strict";
 
+// Question 2: argument?
+// Extra credit?
+// Questinos 4 and 5?
 /*
+Short-Answer Questions:
 
+1. Briefly describe your method for preventing the adversary from learning information about the lengths of the passwords stored in 
+   your password manager.
+	
+	We used the padding function in our implementation to pad all passwords to maximum password length specified in the program. 
+    Therefore all passwords stored in our password manager have same length.
 
+2. Briefly describe your method for preventing swap attacks (Section 2.2). Provide an argument for why the attack is prevented in 
+   your scheme.
 
-  1. Briefly describe your method for preventing the adversary from learning information about the lengths of the passwords stored in your password manager.
+    1. The key-value-store in our password stores a pair of HMAC hashed domain name, and an authentication encrypted password 
+       concatenated with the HMAC hash of its domain name.  
+    2. keychain  = {HMAC(domain_name), AE(padded_password || HMAC(domain_name))}
 
-    1. We used the padding function in our implementation to to pad all passwords to maximum password length specified in the program. Therefore all passwords stored in our password manager have same length.
+    Proof by contradition: Assume there's an adversary that can successfully perform the swap attack. This means that the adversary
+    can swap the record for 
+              HMAC(domain_name1), AE(padded_password1 || HMAC(domain_name1)) 
+          and HMAC(domain_name2), AE(padded_password2 || HMAC(domain_name2)) 
+    such that the new records are 
+              HMAC(domain_name1), AE(padded_password2 || HMAC(domain_name1)) 
+          and HMAC(domain_name2), AE(padded_password1 || HMAC(domain_name2)).
+    However, this means that the adversary broke AE() (i.e. gcm) since he was able to correctly encrypt the new entries 
+ 		      padded_password2 || HMAC(domain_name1)
+          and padded_password1 || HMAC(domain_name2).
+    But AE() is secure. We have reached a contradiction. Thus, the scheme protects againts a swap attack.
 
-  2. Briefly describe your method for preventing swap attacks (Section 2.2). [ ]Provide an argument for why the attack is prevented in your scheme.
+3. In our proposed defense against the rollback attack (Section 2.2), we assume that we can store the SHA-256 hash in a trusted 
+   location beyond the reach of an adversary. Is it necessary to assume that such a trusted location exists, in order to defend 
+   against rollback attacks? Briefly justify your answer.
 
+	Yes, it is necessary to assume that a trusted location exists. This is because if we assume that the hash is not saved in a secure
+    storage location, our integrity scheme of padding the HMAC(domain_name) to the padded password only protects against swap attacks. 
+    An adversary can swap the stored "AE(padded_password || HMAC(domain_name)" entry with an older 
+    "AE(padded_password' || HMAC(domain_name)" entry, and the password manage won't be able to detect it because the HAMC(domain_name)
+    will still match.
 
-    1. The key-value-store in our password stores a pair of HMAC hashed domain name, and an authentication encrypted password concatenated with the HMAC hash of its domain name.  
-    2. keychain  = {HMAC(domain_name), AE(password || HMAC(domain_name))}
+  4. What if we had used a different MAC (other than HMAC) on the domain names to produce the keys for the key-value store? 
+     Would the scheme still satisfy the desired security properties? Either show this, or give an example of a secure MAC for which 
+     the resulting password manager implementation would be insecure.
+    
+	The reason HMAC satisfies the requirement for generating keys is that it is a PRF and is existentially unforgeable. If another 
+    MAC satisfies these properites, then it is acceptable to replace HMAC with the new MAC.
+     
 
-  3. In our proposed defense against the rollback attack (Section 2.2), we assume that we can store the SHA-256 hash in a trusted location beyond the reach of an adversary. Is it necessary to assume that such a trusted location exists, in order to defend against rollback attacks? Briefly justify your answer.
-  4. What if we had used a different MAC (other than HMAC) on the domain names to produce the keys for the key-value store? Would the scheme still satisfy the desired security properties? Either show this, or give an example of a secure MAC for which the resulting password manager implementation would be insecure.
+  5. In our specification, we leak the number of records in the password manager. Describe an approach to reduce or completely 
+     eliminate the information leaked about the number of records.
 
-  5. In our specification, we leak the number of records in the password manager. Describe an approach to reduce or completely eliminate the information leaked about the number of records.
-
+    One -ideal- solution would be to set a large upper bound on the total number of passwords and have the password manager always
+    occupying the same space on disk (with the unused space padded with random bits). However, this design would suffer from inefficient
+    use of memory and storage.
+    
+	Another solution would be to pad the password manager with a random number of dummy records. So, every time we dump the password 
+    manager, we pad it with a random number of dummy records. For example, if the password manager has 10 records, the dumped version 
+    could be padded to 30 records at one intance and could be padded to 49 records at another intance.
+ 
 */
 
 /*
@@ -26,7 +67,7 @@
   k_hmac <-- HMAC(k, r0) // r1 is random bits (or any value, like 0, that's different from r2) saved in priv.data
   k_gcm <-- HMAC(k, r1)  // r2 is random bits (or any value, like 1, that's different from r2) saved in priv.data
   tag that is stored on disk and used for verifying key, t <-- HMAC(k, r2) // r3 is random bits (or any value, like 0, 
-																		// that's different from r2) saved in priv.data.
+																		   // that's different from r2) saved in priv.data.
   To argue security, say that we're only using k_prf, k_gcm, and t, which are "pseudorandom" bits, and that the only
   dependence on k is through PRF(k, 0), PRF(k, 1), and PRF(k, 2)  
 */
@@ -78,6 +119,13 @@ var keychain = function() {
   var ready = false;
 
   var keychain = {};
+  
+  var kdf_salt = "10000000";
+  var k_nonces = new Array();
+  k_nonces[0] = "0";
+  k_nonces[1] = "1";
+  k_nonces[2] = "2";
+  
 
   /** 
     * Creates an empty keychain with the given password. Once init is called,
@@ -89,14 +137,14 @@ var keychain = function() {
     */
   keychain.init = function(password) {
 	  // Iniitialize a new password manager.
-	  priv.secrets.masterKDF = KDF(password, "10000000"); 
+	  priv.secrets.masterKDF = KDF(password, kdf_salt); 
 	  
 	  // Private Data, will NOT be seriliazed into disk
-	  priv.secrets.k_hmac = HMAC(priv.secrets.masterKDF, "0");
-	  priv.secrets.k_gcm = HMAC(priv.secrets.masterKDF, "1");
+	  priv.secrets.k_hmac = HMAC(priv.secrets.masterKDF, k_nonces[0]);
+	  priv.secrets.k_gcm = HMAC(priv.secrets.masterKDF, k_nonces[1]);
 	  
 	  // Public Data, will be seriliazed into disk
-	  priv.data.k_verification_tag = HMAC(priv.secrets.masterKDF, "2");
+	  priv.data.k_verification_tag = HMAC(priv.secrets.masterKDF, k_nonces[2]);
 	  
 	  ready = true;
   };
@@ -127,18 +175,18 @@ var keychain = function() {
 	  var keychain_JSON = deserialized.substr(deserialized.indexOf("#")+1, deserialized.length);
 	  priv.data = JSON.parse(priv_JSON);
 	  keychain = JSON.parse(keychain_JSON);
-	  var masterKDF = KDF(password, "10000000");
-	  if (!bitarray_equal(HMAC(masterKDF, "2"), priv.data.k_verification_tag)) {
+	  var masterKDF = KDF(password, kdf_salt);
+	  if (!bitarray_equal(HMAC(masterKDF, k_nonces[2]), priv.data.k_verification_tag)) {
 		  return false;
 	  }
 	  
   	// Private Data, will NOT be seriliazed into disk
   	priv.secrets.masterKDF = masterKDF;
-	  priv.secrets.k_hmac = HMAC(priv.secrets.masterKDF, "0");
-	  priv.secrets.k_gcm = HMAC(priv.secrets.masterKDF, "1");
+	  priv.secrets.k_hmac = HMAC(priv.secrets.masterKDF, k_nonces[0]);
+	  priv.secrets.k_gcm = HMAC(priv.secrets.masterKDF, k_nonces[1]);
 	  
 	  // Public Data, will be seriliazed into disk
-	  priv.data.k_verification_tag = HMAC(priv.secrets.masterKDF, "2");
+	  priv.data.k_verification_tag = HMAC(priv.secrets.masterKDF, k_nonces[2]);
 	  
 	  ready = true; 
 	  return true;
