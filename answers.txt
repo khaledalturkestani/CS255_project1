@@ -18,10 +18,11 @@
     such that the new records are 
               HMAC(domain_name1), AE(padded_password2 || HMAC(domain_name1)) 
           and HMAC(domain_name2), AE(padded_password1 || HMAC(domain_name2)).
-    However, this means that the adversary broke AE() (i.e. AES-128/GCM) since he was able to correctly encrypt the new entries 
-              padded_password2 || HMAC(domain_name1)
-          and padded_password1 || HMAC(domain_name2).
-    But AE() is secure. We have reached a contradiction. Thus, the scheme protects againts a swap attack.
+    However, this means that the adversary broke AE() (i.e. AES-128/GCM) since the ciphertext integrity property was violated because
+	he was able to submit a new ciphertext 
+    		  AE(padded_password2 || HMAC(domain_name1))
+           or AE(padded_password1 || HMAC(domain_name2))
+	that the challenge (AE) accepted. We have reached a contradiction. Thus, the scheme protects againts a swap attack.
 
 3. In our proposed defense against the rollback attack (Section 2.2), we assume that we can store the SHA-256 hash in a trusted 
    location beyond the reach of an adversary. Is it necessary to assume that such a trusted location exists, in order to defend 
@@ -44,11 +45,7 @@
    eliminate the information leaked about the number of records.
 
    One -ideal- solution would be to set a large upper bound on the total number of passwords and have the password manager always
-   occupying the same space on disk (with the unused space padded with random bits). However, this design would suffer from inefficient
-   use of memory and storage.
-    
-   Another solution would be to pad the password manager with a random number of dummy records. So, every time we dump the password 
-   manager, we pad it with a random number of dummy records. For example, if the password manager has 10 records, the dumped version 
-   could be padded to 30 records at one intance and could be padded to 49 records at another intance.
- 
+   occupying the same space on disk (with the unused space padded with random bits). However, this design would suffer from
+   inefficient use of memory and storage. Also, note that this sets and upper limit on the number of records in the password 
+   manager, but this is acceptable if the upper bound is big enough that it's very unlikely for a user to occupy all of it. 
 
